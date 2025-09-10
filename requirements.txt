@@ -1,0 +1,8 @@
+numpy==1.23.5
+uvicorn[standard]
+fastapi
+python-multipart
+face_recognition
+pydantic-settings
+pytest
+httpx
