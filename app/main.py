@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
@@ -12,6 +13,7 @@ from typing import List, Tuple
 from fastapi.responses import JSONResponse
 from PIL import Image
 from contextlib import asynccontextmanager
+from huggingface_hub import InferenceClient
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,6 +27,13 @@ async def lifespan(app: FastAPI):
     app.state.model_lock = model_lock
 
     app.state.settings = Settings()
+
+    app.state.client = InferenceClient(
+
+        provider = app.state.settings.provider,
+
+        api_key = app.state.settings.api_key,
+    )
 
     yield
 
@@ -125,6 +134,58 @@ async def detect_faces(img : UploadFile) -> Tuple[np.ndarray, Tuple[int, int, in
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(app.state.executor, lambda: evaluate_pic(img_np))
 
+
+async def process_image(file: UploadFile, prompt: str) -> str:
+    """
+    Processes an uploaded image file: validates its format and resolution,
+    sends it to the InferenceClient for image-to-image generation,
+    and returns the generated image as a base64 string.
+
+    Args:
+        file (UploadFile): The uploaded image file (.png or .jpg)
+        prompt (str): Text prompt for image generation
+
+    Raises:
+        HTTPException: If the file format is not supported
+        HTTPException: If the prompt length exceeds the maximum allowed
+        HTTPException: If the prompt contains no letters
+        HTTPException: If the image resolution is smaller than the minimum required
+
+    Returns:
+        str: Generated image encoded as a base64 string
+    """
+    if not (file.filename.lower().endswith(".png") or file.filename.lower().endswith(".jpg")): raise HTTPException(
+        status_code=400,
+        detail="Only PNG/JPG files are allowed")
+
+    if len(prompt) > app.state.settings.prompt_max_length: raise HTTPException(status_code=400,
+
+                                                                               detail="Prompt is too long")
+    if not re.search(r"[a-zA-Z]", prompt):
+        raise HTTPException(
+            status_code=400,
+            detail="Prompt must contain at least one letter"
+        )
+
+    contents = await file.read()
+
+    with Image.open(BytesIO(contents)) as img:
+        width, height = img.size
+
+    if (width < app.state.settings.min_width) or (height < app.state.settings.min_height):
+        raise HTTPException(status_code=400, detail="Wrong image size")
+
+    loop = asyncio.get_running_loop()
+    image: Image.Image = await loop.run_in_executor(
+        None,
+        lambda: app.state.client.image_to_image(contents, prompt=prompt, model="Qwen/Qwen-Image-Edit")
+    )
+
+    buf = BytesIO()
+    image.save(buf, format="PNG")
+    encoded = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return encoded
+
 class PredictionResponse(BaseModel):
     """
     Response model for face detection.
@@ -135,6 +196,16 @@ class PredictionResponse(BaseModel):
     """
     picture: bytes
     bbox: Tuple[int, int, int, int]
+
+class GenerationResponse(BaseModel):
+    """
+    Response model for face detection.
+
+    Attributes:
+        picture (str): Base64-encoded image.
+        bbox (Tuple[int, int, int, int]): Bounding box (x_left, y_bottom, x_right, y_top).
+    """
+    picture: bytes
 
 app = FastAPI(lifespan=lifespan)
 
@@ -182,4 +253,27 @@ async def create_upload_files(
         file_bytes = await file.read()
         encoded = base64.b64encode(file_bytes).decode("utf-8")
         response_list.append(PredictionResponse(picture=encoded, bbox=bbox))
+    return response_list
+
+@app.post("/uploadfiles_")
+async def create_upload_files(
+        files: List[UploadFile] = File(...),
+        prompt: str = Form(...),
+) -> List[GenerationResponse]:
+    """
+    Uploads multiple image files and processes them asynchronously
+    using the provided prompt. Returns a list of generated images in base64 format.
+
+    Args:
+        files (List[UploadFile]): List of uploaded image files (.png or .jpg)
+        prompt (str): Text prompt for generating images
+
+    Returns:
+        List[GenerationResponse]: List of response objects containing the base64-encoded images
+    """
+    tasks = [process_image(file, prompt) for file in files]
+    results = await asyncio.gather(*tasks)
+    response_list = []
+    for res in results:
+        response_list.append(GenerationResponse(picture=res))
     return response_list

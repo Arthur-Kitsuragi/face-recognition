@@ -57,5 +57,26 @@ def test_prepare_image():
     assert isinstance(result, np.ndarray)
     assert result.shape == (100, 100, 3)
 
+@pytest.mark.asyncio
+async def test_process_image():
 
+    from app.main import process_image
+    import types
+    from config.config import Settings
+    import app.main
 
+    img_array = np.full((100, 100, 3), 128, dtype=np.uint8)
+    pil_img = Image.fromarray(img_array)
+    buf = BytesIO()
+    pil_img.save(buf, format="PNG")
+    buf.seek(0)
+    upload_file = UploadFile(filename="test.png", file=buf)
+
+    app.main.app.state = types.SimpleNamespace()
+    app.main.app.state.settings = Settings()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await process_image(upload_file, "prompt")
+
+    assert exc_info.value.status_code == 400
+    assert "Wrong image size" in exc_info.value.detail

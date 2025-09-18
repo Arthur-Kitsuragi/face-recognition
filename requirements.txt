@@ -5,4 +5,6 @@ python-multipart
 face_recognition
 pydantic-settings
 pytest
+pytest-asyncio
 httpx
+huggingface-hub
