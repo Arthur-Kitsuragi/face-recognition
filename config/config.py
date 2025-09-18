@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     area_factor: float = 0.3
     prompt_max_length: int = 50
     provider: str = "fal-ai"
-    api_key: str = "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"
+    api_key: str = ""
     min_width: int = 720
     min_height: int = 405
     class Config:
