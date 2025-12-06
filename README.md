@@ -2,7 +2,7 @@
 
 - git clone https://github.com/Arthur-Kitsuragi/face-recognition
 
-- cd fast-api
+- cd face-recognition
 
 - docker build -t face-recognition-app .
 
