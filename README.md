@@ -11,3 +11,11 @@
 - open your browser and go to http://localhost:5000/docs
 
 - pytest -v tests/ (another tests)
+
+## Warning
+
+You need to have access to fal-api to test this app.
+
+## Example of usage (bounding box)
+
+
