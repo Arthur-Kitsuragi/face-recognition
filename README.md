@@ -17,5 +17,5 @@
 You need to have access to fal-api to test this app.
 
 ## Example of usage (bounding box)
-
+![Bounding Box Demo](assets/ezgif-1a30d3d2337e25eb.gif)
 
