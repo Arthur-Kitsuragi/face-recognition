@@ -17,5 +17,5 @@
 You need to have access to fal-api to test prompt-editing.
 
 ## Example of usage (bounding box)
-![Bounding Box Demo](assets/ezgif-1a30d3d2337e25eb.gif)
+![Bounding Box Demo](assets/ezgif-166dd6f82690f1d4.gif)
 
